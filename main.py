@@ -56,6 +56,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+API_VERSION = "2.0"
+
 # Config (defaults act as fallback if token file missing)
 CLIENT_ID = "zU4XHVVkc2tDPo4t"
 CLIENT_SECRET = "VJKhDFqJPqvsPVNBV6ukXTJmwlvbttP7wlMlrc72se4="
@@ -172,7 +174,7 @@ async def make_request(url: str, token: Optional[str] = None, params: Optional[d
             resp = await client.get(url, headers=headers, params=params)
 
         resp.raise_for_status()
-        return resp.json()
+        return {"version": API_VERSION, "data": resp.json()}
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             raise HTTPException(status_code=404, detail="Resource not found")
@@ -182,7 +184,7 @@ async def make_request(url: str, token: Optional[str] = None, params: Optional[d
 
 @app.get("/")
 async def index():
-    return {"HIFI-API": "v2.0", "Repo": "https://github.com/uimaxbai/hifi-api"}
+    return {"version": API_VERSION, "HIFI-API": "v2.0", "Repo": "https://github.com/uimaxbai/hifi-api"}
 
 @app.get("/info/")
 async def get_info(id: int):
