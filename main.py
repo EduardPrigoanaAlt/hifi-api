@@ -449,21 +449,43 @@ async def get_similar_artists(
 @app.get("/album/similar/")
 async def get_similar_albums(
     id: int = Query(..., description="Album ID"),
-    limit: int = Query(25, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    cursor: Union[int, str, None] = None
 ):
-    """Fetch albums similar to another by its ID."""
-    token, cred = await get_tidal_token_for_cred()
-    
-    url = f"https://api.tidal.com/v1/albums/{id}/similar"
+    """Fetch albums similar to another by its ID using V2 API."""
+    url = f"https://openapi.tidal.com/v2/albums/{id}/relationships/similarAlbums"
     params = {
-        "limit": limit,
-        "offset": offset,
-        "countryCode": "US"
+        "page[cursor]": cursor,
+        "countryCode": "US",
+        "include": "similarAlbums,similarAlbums.coverArt"
     }
-    
-    data, _, _ = await authed_get_json(url, params=params, token=token, cred=cred)
-    return {"version": API_VERSION, "albums": data.get("items", [])}
+
+    payload, _, _ = await authed_get_json(url, params=params)
+    included = payload.get("included", [])
+    albums_map = {i["id"]: i for i in included if i["type"] == "albums"}
+    artworks_map = {i["id"]: i for i in included if i["type"] == "artworks"}
+
+    def resolve_album(entry):
+        aid = entry["id"]
+        inc = albums_map.get(aid, {})
+        attr = inc.get("attributes", {})
+
+        cover_id = None
+        if art_data := inc.get("relationships", {}).get("coverArt", {}).get("data"):
+            if artwork := artworks_map.get(art_data[0].get("id")):
+                if files := artwork.get("attributes", {}).get("files"):
+                    cover_id = _extract_uuid_from_tidal_url(files[0].get("href"))
+
+        return {
+            **attr,
+            "id": int(aid) if aid.isdigit() else aid,
+            "cover": cover_id,
+            "url": f"http://www.tidal.com/album/{aid}"
+        }
+
+    return {
+        "version": API_VERSION,
+        "albums": [resolve_album(e) for e in payload.get("data", [])]
+    }
 
 
 @app.get("/artist/")
