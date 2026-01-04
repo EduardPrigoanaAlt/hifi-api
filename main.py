@@ -397,24 +397,53 @@ async def get_playlist(
     }
 
 
+def _extract_uuid_from_tidal_url(href: str) -> Optional[str]:
+    """Extract and reconstruct a hyphenated UUID from a Tidal resource URL."""
+    parts = href.split("/") if href else []
+    return "-".join(parts[4:9]) if len(parts) >= 9 else None
+
+
 @app.get("/artist/similar/")
 async def get_similar_artists(
     id: int = Query(..., description="Artist ID"),
-    limit: int = Query(25, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    cursor: Union[int, str, None] = None
 ):
-    """Fetch artists similar to another by its ID."""
-    token, cred = await get_tidal_token_for_cred()
-    
-    url = f"https://api.tidal.com/v1/artists/{id}/similar"
+    """Fetch artists similar to another by its ID using V2 API."""
+    url = f"https://openapi.tidal.com/v2/artists/{id}/relationships/similarArtists"
     params = {
-        "limit": limit,
-        "offset": offset,
-        "countryCode": "US"
+        "page[cursor]": cursor,
+        "countryCode": "US",
+        "include": "similarArtists,similarArtists.profileArt"
     }
-    
-    data, _, _ = await authed_get_json(url, params=params, token=token, cred=cred)
-    return {"version": API_VERSION, "artists": data.get("items", [])}
+
+    payload, _, _ = await authed_get_json(url, params=params)
+    included = payload.get("included", [])
+    artists_map = {i["id"]: i for i in included if i["type"] == "artists"}
+    artworks_map = {i["id"]: i for i in included if i["type"] == "artworks"}
+
+    def resolve_artist(entry):
+        aid = entry["id"]
+        inc = artists_map.get(aid, {})
+        attr = inc.get("attributes", {})
+
+        pic_id = None
+        if art_data := inc.get("relationships", {}).get("profileArt", {}).get("data"):
+            if artwork := artworks_map.get(art_data[0].get("id")):
+                if files := artwork.get("attributes", {}).get("files"):
+                    pic_id = _extract_uuid_from_tidal_url(files[0].get("href"))
+
+        return {
+            **attr,
+            "id": int(aid) if aid.isdigit() else aid,
+            "picture": pic_id or attr.get("selectedAlbumCoverFallback"),
+            "url": f"http://www.tidal.com/artist/{aid}",
+            "relationType": "SIMILAR_ARTIST"
+        }
+
+    return {
+        "version": API_VERSION,
+        "artists": [resolve_artist(e) for e in payload.get("data", [])]
+    }
 
 
 @app.get("/album/similar/")
