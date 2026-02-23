@@ -789,5 +789,83 @@ async def get_lyrics(id: int):
     return {"version": API_VERSION, "lyrics": data}
 
 
+@app.get("/topvideos/")
+async def get_top_videos(
+    countryCode: str = Query(default="US"),
+    locale: str = Query(default="en_US"),
+    deviceType: str = Query(default="BROWSER"),
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+):
+    """Fetch recommended videos from Tidal."""
+    token, cred = await get_tidal_token_for_cred()
+    url = "https://tidal.com/v1/pages/mymusic_recommended_videos"
+    params = {
+        "countryCode": countryCode,
+        "locale": locale,
+        "deviceType": deviceType,
+    }
+
+    data, token, cred = await authed_get_json(
+        url,
+        params=params,
+        token=token,
+        cred=cred,
+    )
+
+    rows = data.get("rows", [])
+    all_videos = []
+    for row in rows:
+        modules = row.get("modules", [])
+        for module in modules:
+            module_type = module.get("type")
+            if module_type in ("VIDEO_PLAYLIST", "VIDEO_ROW", "PAGED_LIST"):
+                paged_list = module.get("pagedList", {})
+                if paged_list:
+                    items = paged_list.get("items", [])
+                    for item in items:
+                        video = item.get("item", item)
+                        all_videos.append(video)
+            elif module_type == "VIDEO" or "video" in str(module).lower():
+                item = module.get("item", module)
+                if isinstance(item, dict):
+                    all_videos.append(item)
+
+    paginated = all_videos[offset:offset + limit]
+
+    return {
+        "version": API_VERSION,
+        "videos": paginated,
+        "total": len(all_videos),
+        "debug_rows": len(rows),
+    }
+
+
+@app.get("/video/")
+async def get_video(
+    id: int = Query(..., description="Video ID"),
+    videoQuality: str = Query(default="HIGH", description="Video quality (HIGH, MEDIUM, LOW)"),
+    playbackMode: str = Query(default="STREAM", description="Playback mode (STREAM, OFFLINE)"),
+    assetPresentation: str = Query(default="FULL", description="Asset presentation (FULL, PREVIEW)"),
+):
+    """Fetch video playback info from Tidal."""
+    token, cred = await get_tidal_token_for_cred()
+    url = f"https://tidal.com/v1/videos/{id}/playbackinfo"
+    params = {
+        "videoquality": videoQuality,
+        "playbackmode": playbackMode,
+        "assetpresentation": assetPresentation,
+    }
+
+    data, token, cred = await authed_get_json(
+        url,
+        params=params,
+        token=token,
+        cred=cred,
+    )
+
+    return {"version": API_VERSION, "video": data}
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
