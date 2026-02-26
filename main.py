@@ -844,17 +844,17 @@ async def get_top_videos(
 @app.get("/video/")
 async def get_video(
     id: int = Query(..., description="Video ID"),
-    videoQuality: str = Query(default="HIGH", description="Video quality (HIGH, MEDIUM, LOW)"),
-    playbackMode: str = Query(default="STREAM", description="Playback mode (STREAM, OFFLINE)"),
-    assetPresentation: str = Query(default="FULL", description="Asset presentation (FULL, PREVIEW)"),
+    quality: str = Query(default="HIGH", description="Video quality (HIGH, MEDIUM, LOW)"),
+    mode: str = Query(default="STREAM", description="Playback mode (STREAM, OFFLINE)"),
+    presentation: str = Query(default="FULL", description="Asset presentation (FULL, PREVIEW)"),
 ):
     """Fetch video playback info from Tidal."""
     token, cred = await get_tidal_token_for_cred()
     url = f"https://tidal.com/v1/videos/{id}/playbackinfo"
     params = {
-        "videoquality": videoQuality,
-        "playbackmode": playbackMode,
-        "assetpresentation": assetPresentation,
+        "videoquality": quality,
+        "playbackmode": mode,
+        "assetpresentation": presentation,
     }
 
     data, token, cred = await authed_get_json(
