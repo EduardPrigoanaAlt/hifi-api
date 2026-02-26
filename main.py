@@ -826,7 +826,7 @@ async def get_top_videos(
                     for item in items:
                         video = item.get("item", item)
                         all_videos.append(video)
-            elif module_type == "VIDEO" or "video" in str(module).lower():
+            elif module_type == "VIDEO" or ("video" in str(module).lower()):
                 item = module.get("item", module)
                 if isinstance(item, dict):
                     all_videos.append(item)
