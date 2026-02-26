@@ -838,11 +838,8 @@ async def get_top_videos(
         "videos": paginated,
         "total": len(all_videos),
     }
-
-    if os.getenv("API_DEBUG_ROWS", "").lower() in ("1", "true", "yes"):
-        response["debug_rows"] = len(rows)
-
     return response
+
 @app.get("/video/")
 async def get_video(
     id: int = Query(..., description="Video ID"),
